@@ -1,0 +1,560 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  signOut, 
+  GoogleAuthProvider, 
+  signInWithPopup 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  onSnapshot 
+} from 'firebase/firestore';
+import { 
+  Compass, 
+  Target, 
+  Zap, 
+  CheckCircle2, 
+  Calendar, 
+  BarChart3, 
+  Star, 
+  Plus, 
+  Trash2, 
+  Cloud, 
+  Heart, 
+  Briefcase, 
+  Users, 
+  Activity, 
+  DollarSign, 
+  BookOpen,
+  LogOut,
+  User,
+  RefreshCw,
+  ChevronRight,
+  Smile,
+  Meh,
+  Frown,
+  AlertCircle
+} from 'lucide-react';
+
+// --- Firebase Configuration & Init ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'sistem-hidup-v3';
+
+// --- Constants ---
+const SECTIONS = [
+  { id: 'grandwhy', label: 'Grand Why', icon: Compass, color: 'text-orange-600' },
+  { id: 'visi', label: 'Visi & Misi', icon: Star, color: 'text-yellow-600' },
+  { id: 'goals', label: 'Goals', icon: Target, color: 'text-red-600' },
+  { id: 'habits', label: 'Habits', icon: Zap, color: 'text-blue-600' },
+  { id: 'tracker', label: 'Tracker', icon: CheckCircle2, color: 'text-green-600' },
+  { id: 'evaluasi', label: 'Evaluasi', icon: BarChart3, color: 'text-purple-600' },
+];
+
+const INITIAL_DATA = {
+  grandWhy: "",
+  purpose: "",
+  pillars: [
+    { id: 'p1', name: 'Spiritual', icon: '🕌', targets: ['Sholat tepat waktu', 'Sedekah rutin'] },
+    { id: 'p2', name: 'Skill & Karir', icon: '💼', targets: ['Belajar Skill Baru', 'Project Selesai'] },
+    { id: 'p3', name: 'Keluarga', icon: '👨‍👩‍👧', targets: ['Quality time harian', 'Bantu Orang Tua'] }
+  ],
+  values: ["Tauhid", "Integritas", "Pertumbuhan", "Manfaat", "Sederhana"],
+  visions: { v20: "", v5: "", v1: "", mission: "", theme: "" },
+  goals: {
+    nonNegotiable: [{ id: 'g1', text: '', pilar: '', target: '' }],
+    annual: [{ id: 'gy1', text: '', measure: '' }],
+    midTerm: [],
+    legacy: []
+  },
+  habits: [
+    { id: 'h1', name: 'Bangun Pagi', category: 'Kesehatan', importance: 'High' },
+    { id: 'h2', name: 'Baca Quran/Buku', category: 'Spiritual', importance: 'High' }
+  ],
+  tracker: { completed: {}, mood: {}, notes: {} },
+  evals: { weekly: {}, monthly: {}, quarterly: {}, yearly: {} }
+};
+
+// --- Sub-Components ---
+
+const Card = ({ children, title, subtitle, accentColor = "border-stone-200" }) => (
+  <div className={`bg-white border ${accentColor} rounded-xl shadow-sm overflow-hidden mb-6`}>
+    {(title || subtitle) && (
+      <div className="px-5 py-4 border-b border-stone-100 bg-stone-50/50">
+        {title && <h3 className="font-serif text-lg font-bold text-stone-800">{title}</h3>}
+        {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
+      </div>
+    )}
+    <div className="p-5">{children}</div>
+  </div>
+);
+
+const SectionTitle = ({ children, icon: Icon }) => (
+  <div className="flex items-center gap-2 mb-4 mt-8 first:mt-0">
+    {Icon && <Icon size={16} className="text-stone-400" />}
+    <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-stone-400">{children}</h2>
+    <div className="flex-1 h-px bg-stone-100 ml-2"></div>
+  </div>
+);
+
+// --- Login Screen ---
+
+const LoginScreen = () => {
+  const [loading, setLoading] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error("Guest login failed", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#faf8f4] flex flex-col items-center justify-center p-6 text-center">
+      <div className="max-w-md w-full space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-4">
+          <div className="w-24 h-24 bg-stone-900 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl rotate-3">
+            <Compass size={48} className="text-orange-400 -rotate-3" />
+          </div>
+          <h1 className="font-serif text-5xl font-bold text-stone-800 tracking-tight">Sistem Hidup</h1>
+          <p className="text-stone-500 italic">"Satu tempat untuk visi, eksekusi, dan refleksi."</p>
+        </div>
+
+        <div className="bg-white p-8 rounded-3xl border border-stone-200 shadow-xl space-y-4">
+          <button 
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 py-4 rounded-2xl font-bold transition-all disabled:opacity-50 active:scale-95 shadow-sm"
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" alt="Google" />
+            Masuk dengan Google
+          </button>
+          
+          <button 
+            onClick={handleGuestLogin}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 bg-stone-900 hover:bg-stone-800 text-white py-4 rounded-2xl font-bold transition-all disabled:opacity-50 active:scale-95 shadow-lg shadow-stone-900/20"
+          >
+            <User size={20} />
+            Mulai Tanpa Akun
+          </button>
+
+          <div className="pt-4 flex items-center gap-2 justify-center text-[10px] text-stone-400 uppercase tracking-widest">
+            <Cloud size={12} />
+            Data disinkronkan ke Cloud
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Main Application ---
+
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('grandwhy');
+  const [data, setData] = useState(INITIAL_DATA);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [selectedEval, setSelectedEval] = useState('weekly');
+
+  // 1. Auth & Data Init
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        try { await signInWithCustomToken(auth, __initial_auth_token); } catch(e) {}
+      } else {
+        // Optional: signInAnonymously(auth); // Biarkan user klik manual
+      }
+    };
+    initAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Real-time Cloud Sync
+  useEffect(() => {
+    if (!user) return;
+    const userDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'main');
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setData(prev => ({ ...prev, ...docSnap.data() }));
+      } else {
+        // New user: Push initial data
+        setDoc(userDocRef, INITIAL_DATA);
+      }
+    }, (err) => console.error("Sync Error:", err));
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // 3. Update Helpers
+  const updateData = async (path, value) => {
+    if (!user) return;
+    setIsSyncing(true);
+    
+    setData(prev => {
+      const newData = { ...prev };
+      const keys = path.split('.');
+      let current = newData;
+      for (let i = 0; i < keys.length - 1; i++) {
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+
+      // Firestore update
+      const userDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'main');
+      setDoc(userDocRef, newData, { merge: true }).finally(() => setIsSyncing(false));
+      
+      return newData;
+    });
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const habitProgress = useMemo(() => {
+    const total = data.habits.length;
+    if (total === 0) return 0;
+    const done = data.habits.filter(h => data.tracker.completed[`${today}:${h.id}`]).length;
+    return Math.round((done / total) * 100);
+  }, [data.habits, data.tracker.completed, today]);
+
+  if (authLoading) return <div className="min-h-screen bg-[#faf8f4] flex items-center justify-center"><RefreshCw className="text-orange-500 animate-spin" size={32} /></div>;
+  if (!user) return <LoginScreen />;
+
+  return (
+    <div className="min-h-screen bg-[#faf8f4] text-[#1a1814] font-sans selection:bg-orange-100">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-stone-900 text-stone-100 shadow-md">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="font-serif text-lg font-bold">
+              Sistem Hidup <span className="italic text-orange-400">— {user.displayName || 'Personal'}</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 bg-stone-800 px-3 py-1 rounded-full border border-stone-700">
+              {isSyncing ? <RefreshCw size={10} className="text-orange-400 animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+              <span className="text-[10px] font-bold uppercase tracking-tighter text-stone-300">{isSyncing ? 'Sync' : 'Live'}</span>
+            </div>
+            <button onClick={() => signOut(auth)} className="text-stone-400 hover:text-white transition-colors"><LogOut size={18} /></button>
+          </div>
+        </div>
+      </header>
+
+      {/* Nav */}
+      <nav className="bg-stone-50 border-b border-stone-200 sticky top-14 z-40 overflow-x-auto no-scrollbar">
+        <div className="max-w-4xl mx-auto px-2 flex">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveTab(s.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
+                activeTab === s.id ? `text-stone-900 border-orange-600` : `text-stone-400 border-transparent hover:text-stone-600`
+              }`}
+            >
+              <s.icon size={16} className={activeTab === s.id ? s.color : 'text-stone-400'} />
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* Content */}
+      <main className="max-w-3xl mx-auto p-5 pb-32">
+        
+        {/* GRAND WHY */}
+        {activeTab === 'grandwhy' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="relative p-8 mb-8 bg-stone-900 rounded-2xl overflow-hidden text-stone-100 shadow-xl">
+               <div className="absolute top-0 right-0 p-4 opacity-10"><Compass size={120} /></div>
+               <p className="font-serif italic text-xl leading-relaxed relative z-10">
+                 "Hidup tanpa <span className="text-orange-400">tujuan</span> hanyalah perjalanan tanpa peta."
+               </p>
+               <p className="text-[10px] mt-4 uppercase tracking-widest text-stone-500 font-bold">ALASAN TERDALAM</p>
+            </div>
+
+            <SectionTitle icon={Compass}>Fondasi Terbesar</SectionTitle>
+            <Card title="Mengapa Aku Hidup?">
+              <textarea 
+                value={data.grandWhy}
+                onChange={(e) => updateData('grandWhy', e.target.value)}
+                placeholder="Tuliskan alasan terdalam Anda di sini..."
+                className="w-full min-h-[140px] bg-stone-50 border border-stone-200 rounded-xl p-4 font-serif italic text-lg text-stone-800 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+              />
+            </Card>
+
+            <SectionTitle icon={Zap}>6 Pilar Kehidupan</SectionTitle>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {data.pillars.map((p, idx) => (
+                <div key={p.id} className="bg-white border border-stone-200 p-4 rounded-xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">{p.icon}</span>
+                    <input className="font-bold text-sm bg-transparent outline-none w-full" value={p.name} 
+                      onChange={(e) => {
+                        const newP = [...data.pillars]; newP[idx].name = e.target.value; updateData('pillars', newP);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    {p.targets.map((t, tIdx) => (
+                      <input key={tIdx} className="text-[11px] text-stone-500 bg-stone-50 w-full px-2 py-1 rounded outline-none" value={t}
+                        onChange={(e) => {
+                          const newP = [...data.pillars]; newP[idx].targets[tIdx] = e.target.value; updateData('pillars', newP);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* VISI & MISI */}
+        {activeTab === 'visi' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+            <Card title="Cakrawala Waktu" subtitle="Visualisasikan masa depan Anda.">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-400 tracking-widest">🔭 10-20 Tahun (Legacy)</label>
+                  <textarea value={data.visions.v20} onChange={(e) => updateData('visions.v20', e.target.value)} className="w-full mt-1 bg-stone-50 border p-3 rounded-lg text-sm outline-none focus:ring-1 focus:ring-orange-500" rows={3} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-400 tracking-widest">🗺️ 3-5 Tahun (Strategic)</label>
+                  <textarea value={data.visions.v5} onChange={(e) => updateData('visions.v5', e.target.value)} className="w-full mt-1 bg-stone-50 border p-3 rounded-lg text-sm outline-none focus:ring-1 focus:ring-orange-500" rows={3} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-400 tracking-widest">🎯 Tahun Ini</label>
+                  <textarea value={data.visions.v1} onChange={(e) => updateData('visions.v1', e.target.value)} className="w-full mt-1 bg-stone-50 border p-3 rounded-lg text-sm outline-none focus:ring-1 focus:ring-orange-500" rows={3} />
+                </div>
+              </div>
+            </Card>
+            <Card title="Tema & Misi" subtitle="Fokus operasional Anda saat ini.">
+              <div className="space-y-4">
+                <input placeholder="Tema Hidup Tahun Ini (Contoh: Skalabilitas)" className="w-full font-serif text-xl italic text-center text-orange-600 border-b outline-none pb-2" value={data.visions.theme} onChange={(e) => updateData('visions.theme', e.target.value)} />
+                <textarea placeholder="Pernyataan Misi Harian..." className="w-full bg-stone-50 border p-3 rounded-lg text-sm outline-none focus:ring-1 focus:ring-orange-500" rows={2} value={data.visions.mission} onChange={(e) => updateData('visions.mission', e.target.value)} />
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* GOALS */}
+        {activeTab === 'goals' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+            <SectionTitle icon={Target}>🔴 Non-Negotiable Goals</SectionTitle>
+            {data.goals.nonNegotiable.map((g, idx) => (
+              <div key={g.id} className="bg-white p-4 rounded-xl border border-stone-200 flex gap-4 group shadow-sm">
+                <div className="flex-1 space-y-2">
+                  <input className="w-full font-bold text-stone-800 outline-none" placeholder="Target Utama..." value={g.text} onChange={(e) => {
+                    const newG = [...data.goals.nonNegotiable]; newG[idx].text = e.target.value; updateData('goals.nonNegotiable', newG);
+                  }} />
+                  <div className="flex gap-2">
+                    <input className="text-xs bg-stone-50 px-2 py-1 rounded w-1/2" placeholder="Pilar..." value={g.pilar} onChange={(e) => {
+                      const newG = [...data.goals.nonNegotiable]; newG[idx].pilar = e.target.value; updateData('goals.nonNegotiable', newG);
+                    }} />
+                    <input className="text-xs bg-stone-50 px-2 py-1 rounded w-1/2" placeholder="Waktu..." value={g.target} onChange={(e) => {
+                      const newG = [...data.goals.nonNegotiable]; newG[idx].target = e.target.value; updateData('goals.nonNegotiable', newG);
+                    }} />
+                  </div>
+                </div>
+                <button onClick={() => {
+                  const newG = data.goals.nonNegotiable.filter((_, i) => i !== idx); updateData('goals.nonNegotiable', newG);
+                }} className="text-stone-300 hover:text-red-500 transition-colors self-start"><Trash2 size={16} /></button>
+              </div>
+            ))}
+            <button onClick={() => {
+              const newG = [...data.goals.nonNegotiable, { id: Date.now().toString(), text: '', pilar: '', target: '' }];
+              updateData('goals.nonNegotiable', newG);
+            }} className="w-full py-3 border-2 border-dashed border-stone-200 rounded-xl text-stone-400 text-xs font-bold uppercase flex items-center justify-center gap-2 hover:border-orange-200 hover:text-orange-500 transition-all">
+              <Plus size={14} /> Tambah Goal
+            </button>
+          </div>
+        )}
+
+        {/* HABITS */}
+        {activeTab === 'habits' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+            <SectionTitle icon={Zap}>Master Habit List</SectionTitle>
+            <div className="grid gap-3">
+              {data.habits.map((h, idx) => (
+                <div key={h.id} className="bg-white border p-4 rounded-xl flex items-center gap-4 shadow-sm group">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${h.importance === 'High' ? 'bg-orange-50 text-orange-600' : 'bg-stone-50 text-stone-400'}`}>
+                    <Activity size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <input className="font-bold text-stone-800 w-full outline-none" value={h.name} onChange={(e) => {
+                      const newH = [...data.habits]; newH[idx].name = e.target.value; updateData('habits', newH);
+                    }} />
+                    <div className="flex gap-2 mt-1">
+                      <select className="text-[10px] bg-stone-50 text-stone-500 font-bold uppercase tracking-tighter rounded px-1" value={h.category} onChange={(e) => {
+                        const newH = [...data.habits]; newH[idx].category = e.target.value; updateData('habits', newH);
+                      }}>
+                        <option>Spiritual</option><option>Kesehatan</option><option>Skill</option><option>Finansial</option>
+                      </select>
+                      <select className="text-[10px] bg-stone-50 text-stone-500 font-bold uppercase tracking-tighter rounded px-1" value={h.importance} onChange={(e) => {
+                        const newH = [...data.habits]; newH[idx].importance = e.target.value; updateData('habits', newH);
+                      }}>
+                        <option>High</option><option>Medium</option><option>Low</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button onClick={() => {
+                    const newH = data.habits.filter((_, i) => i !== idx); updateData('habits', newH);
+                  }} className="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-500 transition-all"><Trash2 size={16} /></button>
+                </div>
+              ))}
+              <button onClick={() => {
+                const newH = [...data.habits, { id: 'h' + Date.now(), name: 'Habit Baru', category: 'Kesehatan', importance: 'Medium' }];
+                updateData('habits', newH);
+              }} className="py-4 border-2 border-dashed rounded-xl text-stone-400 text-xs font-bold uppercase flex items-center justify-center gap-2 hover:border-blue-200 hover:text-blue-500 transition-all">
+                <Plus size={14} /> Tambah Habit
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TRACKER */}
+        {activeTab === 'tracker' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <header className="mb-6">
+              <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Hari Ini</p>
+              <h2 className="text-2xl font-serif font-bold text-stone-800">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h2>
+            </header>
+
+            <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm mb-8 flex items-center gap-6">
+              <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                <svg className="absolute w-full h-full -rotate-90">
+                  <circle cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-stone-100" />
+                  <circle cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-green-500 transition-all duration-700" strokeDasharray={`${34 * 2 * Math.PI}`} strokeDashoffset={`${(34 * 2 * Math.PI) * (1 - habitProgress / 100)}`} />
+                </svg>
+                <span className="text-lg font-serif font-bold text-stone-800">{habitProgress}%</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-stone-800 text-sm">Progress Harian</h4>
+                <p className="text-xs text-stone-500 mt-0.5">{habitProgress >= 100 ? 'Hari yang sempurna! ✨' : 'Terus konsisten, satu per satu. 🚀'}</p>
+              </div>
+            </div>
+
+            <SectionTitle icon={CheckCircle2}>Checklist Habit</SectionTitle>
+            <div className="space-y-2">
+              {data.habits.map(h => {
+                const isDone = data.tracker.completed[`${today}:${h.id}`];
+                return (
+                  <button 
+                    key={h.id}
+                    onClick={() => {
+                      const key = `${today}:${h.id}`;
+                      const newC = { ...data.tracker.completed };
+                      if (newC[key]) delete newC[key]; else newC[key] = true;
+                      updateData('tracker.completed', newC);
+                    }}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all ${isDone ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'}`}
+                  >
+                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 ${isDone ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-stone-200'}`}>
+                      {isDone && <CheckCircle2 size={16} />}
+                    </div>
+                    <span className={`flex-1 text-left font-medium text-sm ${isDone ? 'line-through opacity-50' : ''}`}>{h.name}</span>
+                    <span className="text-[10px] uppercase font-bold tracking-tighter opacity-40">{h.category}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <SectionTitle icon={Smile}>Kondisi Jiwa</SectionTitle>
+            <div className="flex gap-2 mb-6">
+              {[
+                { id: 'happy', icon: Smile, color: 'text-green-500', bg: 'bg-green-50' },
+                { id: 'meh', icon: Meh, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+                { id: 'sad', icon: Frown, color: 'text-red-500', bg: 'bg-red-50' }
+              ].map(m => (
+                <button key={m.id} onClick={() => updateData(`tracker.mood.${today}`, m.id)} className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${data.tracker.mood[today] === m.id ? `border-orange-500 ${m.bg}` : 'border-stone-100 bg-white hover:border-stone-200'}`}>
+                  <m.icon className={m.color} size={24} />
+                  <span className="text-[10px] uppercase font-bold text-stone-400">{m.id}</span>
+                </button>
+              ))}
+            </div>
+            <textarea placeholder="Highlight hari ini..." value={data.tracker.notes[today] || ''} onChange={(e) => updateData(`tracker.notes.${today}`, e.target.value)} className="w-full bg-white border border-stone-200 rounded-xl p-4 text-sm outline-none focus:ring-1 focus:ring-orange-500 shadow-sm" rows={3} />
+          </div>
+        )}
+
+        {/* EVALUASI */}
+        {activeTab === 'evaluasi' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+            <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-2">
+              {['weekly', 'monthly', 'quarterly', 'yearly'].map(e => (
+                <button key={e} onClick={() => setSelectedEval(e)} className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${selectedEval === e ? 'bg-stone-900 text-white shadow-lg' : 'bg-stone-100 text-stone-400'}`}>
+                  {e}
+                </button>
+              ))}
+            </div>
+            <Card title={`Review ${selectedEval.charAt(0).toUpperCase() + selectedEval.slice(1)}`}>
+              <div className="space-y-4">
+                <div>
+                   <label className="text-[10px] font-bold text-stone-400 uppercase">🏆 Pencapaian Terbesar</label>
+                   <textarea className="w-full mt-1 bg-stone-50 border p-3 rounded-lg text-sm outline-none" value={data.evals[selectedEval]?.win || ''} onChange={(e) => updateData(`evals.${selectedEval}.win`, e.target.value)} />
+                </div>
+                <div>
+                   <label className="text-[10px] font-bold text-stone-400 uppercase">⚠️ Hambatan/Kegagalan</label>
+                   <textarea className="w-full mt-1 bg-stone-50 border p-3 rounded-lg text-sm outline-none" value={data.evals[selectedEval]?.fail || ''} onChange={(e) => updateData(`evals.${selectedEval}.fail`, e.target.value)} />
+                </div>
+                <div>
+                   <label className="text-[10px] font-bold text-stone-400 uppercase">💡 Pelajaran Utama</label>
+                   <textarea className="w-full mt-1 bg-stone-50 border p-3 rounded-lg text-sm outline-none" value={data.evals[selectedEval]?.lesson || ''} onChange={(e) => updateData(`evals.${selectedEval}.lesson`, e.target.value)} />
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+      </main>
+
+      {/* Footer Info */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-stone-200 py-3 px-6 z-50">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+           <div className="flex items-center gap-3">
+             <div className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Completion</div>
+             <div className="w-32 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+               <div className="h-full bg-orange-500 transition-all duration-500" style={{ width: `${habitProgress}%` }} />
+             </div>
+           </div>
+           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+             <Cloud size={12} className={isSyncing ? 'animate-bounce text-orange-500' : 'text-green-500'} />
+             {isSyncing ? 'Syncing...' : 'All synced'}
+           </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default App;
